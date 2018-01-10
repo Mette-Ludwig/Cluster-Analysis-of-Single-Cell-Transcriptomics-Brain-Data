@@ -1,0 +1,53 @@
+library(reshape2)
+library(ggplot2)
+
+### Plot the Adjusted Rand index (ARI) of the seven datasets ###
+
+# Load the stability matrix
+load("~/ygg-projects/mludwig/Rand_Index/RI_7_datasets.RData")
+
+
+## Prepare the stability data matrix for plotting
+
+stability1 <- stability[[1]]
+stability2 <- stability[[2]]
+stability3 <- stability[[3]]
+stability4 <- stability[[4]]
+stability5 <- stability[[1]]
+stability6 <- stability[[2]]
+stability7 <- stability[[3]]
+
+stability1 <- data.frame(matrix(unlist(stability1), nrow=60))
+stability2 <- data.frame(matrix(unlist(stability2), nrow=60))
+stability3 <- data.frame(matrix(unlist(stability3), nrow=60))
+stability4 <- data.frame(matrix(unlist(stability4), nrow=60))
+stability5 <- data.frame(matrix(unlist(stability5), nrow=60))
+stability6 <- data.frame(matrix(unlist(stability6), nrow=60))
+stability7 <- data.frame(matrix(unlist(stability7), nrow=60))
+
+stability1 <- data.frame(stability1, dataset="1")
+stability2 <- data.frame(stability2, dataset="2")
+stability3 <- data.frame(stability3, dataset="3")
+stability4 <- data.frame(stability4, dataset="4")
+stability5 <- data.frame(stability5, dataset="5")
+stability6 <- data.frame(stability6, dataset="6")
+stability7 <- data.frame(stability7, dataset="7")
+
+
+stability <- rbind(stability1, stability2, stability3, stability4,
+                   stability5, stability6, stability7)
+
+colnames(stability) <- c("Resolution", "clusters.boot", "clusters", 
+                         "RI", "RI.sd", "ARI", "ARI.sd", "Dataset")
+
+
+## Plot the resolution versus the ARI for all seven datasets
+
+ggplot(data=all_stability, aes(x=Resolution, y=ARI, line=Dataset, col=Dataset)) +  
+  geom_line(size=1) + 
+  scale_x_continuous(breaks=seq(0, 6, 0.5)) +
+  theme(legend.text=element_text(size=14),
+        axis.title=element_text(size=17)) 
+
+
+
