@@ -1,0 +1,244 @@
+# Load packages
+library(Seurat)
+library(dplyr)
+library(Matrix)
+
+# Define the path to data folder
+data.path <- paste("~/ygg-data/sc-10x/data-runs/170612-perslab-arc_lira",
+                   "/agg-arc_lira-s1_12-no_norm/outs/filtered_gene_bc_matrices_mex/mm10", 
+                   sep="")
+
+# Load the ARC dataset 
+brain.data <- Read10X(data.dir = data.paths[8])
+
+# Initialize the Seurat object with the raw (non-normalized data).  Keep all
+# genes expressed in >= 3 cells. Keep all cells with at least 200 detected genes
+brain <- CreateSeuratObject(raw.data = brain.data, min.cells = 3, min.genes = 200, 
+                            project = "10X_brain")
+
+
+# Compute the fraction of mitochondrial RNA
+mito.genes <- grep(pattern = "^mt-", x = rownames(x = brain@data), value = TRUE)
+length(mito.genes) # 13 mitochondrial genes
+fraction.mito <- Matrix::colSums(brain@raw.data[mito.genes, ])/Matrix::colSums(brain@raw.data)
+
+# Save data to the Seurat object
+brain <- AddMetaData(object = brain, metadata = fraction.mito, col.name = "fraction.mito")
+
+# Filter out cells that have unique gene counts over 5500 or less than
+# 300. Filter out cells that have unique fraction of mitochondrial RNA 
+# over 0.15
+brain <- FilterCells(object = brain, subset.names = c("nGene", "fraction.mito"), 
+                     low.thresholds = c(300, -Inf), high.thresholds = c(5500, 0.15))
+
+# Normalize the data 
+brain <- NormalizeData(object = brain, normalization.method = "LogNormalize", 
+                       scale.factor = 10000)
+
+# Detect variable genes across the cells
+brain <- FindVariableGenes(object = brain, mean.function = ExpMean, dispersion.function = LogVMR, 
+                           x.low.cutoff = 0.0125, x.high.cutoff = 3, y.cutoff = 0.5)
+
+# Scale the data and remove unwanted sources of variation due to nUMI
+# and fraction of mitochondrial RNA
+brain <- ScaleData(object = brain, vars.to.regress = c("nUMI", "fraction.mito"))
+
+# Perform linear dimensionality reduction
+brain <- RunPCA(object = brain, pc.genes = brain@var.genes, do.print = FALSE, pcs.print = 1:5, 
+                genes.print = 5, pcs.compute = 20)
+
+# Cluster the cells at resolution 0.1 
+brain <- FindClusters(object = brain, reduction.type = "pca", dims.use = 1:15, 
+                      resolution = 0.1, print.output = 0, save.SNN = TRUE, 
+                      force.recalc = TRUE)
+
+# Run Non-linear dimensional reduction (tSNE) 
+brain <- RunTSNE(object = brain, dims.use = 1:15, do.fast = TRUE)
+
+
+### Plot for marker genes
+
+## Neurons ##
+# Excitatory neurons
+FeaturePlot(object = brain, features.plot = c("Stmn2", "Ndrg4", "Rbfox3", 
+            "Tubb3", "Slc17a6"), cols.use = c("grey", "blue"), reduction.use = "tsne")
+
+# Markers unique to excitatory neurons
+FeaturePlot(object = brain, features.plot = c("Stmn2", "Ndrg4", "Npy", "Gal", "Slc17a6"), 
+            cols.use = c("grey", "blue"), reduction.use = "tsne")
+
+# Inhibitory neurons
+FeaturePlot(object = brain, features.plot = c("Rbfox3", "Tubb3", "Gad1", "Gad2", 
+            "Slc32a1"), cols.use = c("grey", "blue"), reduction.use = "tsne")
+
+# Markers unique to inhibitory neurons
+FeaturePlot(object = brain, features.plot = c("Gad1", "Gad2", "Slc32a1"), 
+            cols.use = c("grey", "blue"), reduction.use = "tsne")
+
+# POMC neurons
+FeaturePlot(object = brain, features.plot = c("Pomc", "Tbx19"), 
+            cols.use = c("grey", "blue"), reduction.use = "tsne")
+
+# Tuberoinfundibular dopaminergic Neurons
+FeaturePlot(object = brain, features.plot = c("Th", "Prlr", "Slc6a3"), 
+            cols.use = c("grey", "blue"), reduction.use = "tsne")
+
+# Serotonin sensing
+FeaturePlot(object = brain, features.plot = c("Htr2c", "Htr3b"), 
+            cols.use = c("grey", "blue"), reduction.use = "tsne")
+
+# Kisspeptin neurokinin B dynorphin neurons
+FeaturePlot(object = brain, features.plot = c("Tac2"), 
+            cols.use = c("grey", "blue"), reduction.use = "tsne")
+
+# AgRP neurons
+FeaturePlot(object = brain, features.plot = c("AgRP"), 
+            cols.use = c("grey", "blue"), reduction.use = "tsne")
+
+# Bdnf neurons
+FeaturePlot(object = brain, features.plot = c("Bdnf"), 
+            cols.use = c("grey", "blue"), reduction.use = "tsne")
+
+# Dopaminergic Neurons
+FeaturePlot(object = brain, features.plot = c("Th"), 
+            cols.use = c("grey", "blue"), reduction.use = "tsne")
+
+# GABAergic neurons
+FeaturePlot(object = brain, features.plot = c("Slc32a1"), 
+            cols.use = c("grey", "blue"), reduction.use = "tsne")
+
+# Leptin sensing neurons
+FeaturePlot(object = brain, features.plot = c("Lepr"), 
+            cols.use = c("grey", "blue"), reduction.use = "tsne")
+
+
+## Oligodendrocytes ##
+# Oligodendrocytes
+FeaturePlot(object = brain, features.plot = c("Ugt8a", "Mbp", "Opalin", "Mog", "Mag",
+           "Olig1", "Cd9", "Pllp"), cols.use = c("grey", "blue"), reduction.use = "tsne")
+
+FeaturePlot(object = brain, features.plot = c("Mag"), cols.use = c("grey", "blue"), 
+            reduction.use = "tsne")
+
+# Oligodendrocytes - precursors
+FeaturePlot(object = brain, features.plot = c("Pdgfra", "Gpr17", "Cspg4"), 
+            cols.use = c("grey", "blue"), reduction.use = "tsne")
+
+
+## Astrocytes ## 
+FeaturePlot(object = brain, features.plot = c("Ntsr2", "Fabp7", "Gfap"), 
+              cols.use = c("grey", "blue"), reduction.use = "tsne")
+
+
+## Tanycytes ##
+# Tanycytes alpha 1
+FeaturePlot(object = brain, features.plot = c("Cd59a", "Gfap", "S100b", "Slc1a2", "Tgfb2", 
+                                              "Slc17a8", "Lyz2"), 
+            cols.use = c("grey", "blue"), reduction.use = "tsne")
+
+# Tanycytes alpha 2
+FeaturePlot(object = brain, features.plot = c("Nr2e1", "Pdzph1", "Vcan"), 
+            cols.use = c("grey", "blue"), reduction.use = "tsne")
+
+# Tanycytes beta 1
+FeaturePlot(object = brain, features.plot = c("Frzb", "Gria2", "Penk"), 
+            cols.use = c("grey", "blue"), reduction.use = "tsne")
+
+# Tanycytes beta 2
+FeaturePlot(object = brain, features.plot = c("Adm", "Cldn10", "Fndc3c1", "Rgcc", "Scn7a", 
+                                              "Cysltr1", "Lrrtm3"), 
+            cols.use = c("grey", "blue"), reduction.use = "tsne")
+
+
+## Ependymal cells ##
+FeaturePlot(object = brain, features.plot = c("Enkur", "Foxj1", "Sox2", "Vim", "Ccdc153"), 
+            cols.use = c("grey", "blue"),
+            reduction.use = "tsne")
+
+## Microglia ##
+FeaturePlot(object = brain, features.plot = c("Fcer1g", "Aif1", "Itgam"), 
+            cols.use = c("grey", "blue"), reduction.use = "tsne")
+
+# Microglia 1
+FeaturePlot(object = brain, features.plot = c("Fcer1g", "Aif1", "Tmem119", "P2ry12", 
+            "Itgam"), cols.use = c("grey", "blue"), reduction.use = "tsne")
+
+# Microglia 2
+FeaturePlot(object = brain, features.plot = c("Fcer1g", "Aif1", "Ccl7", "Itgam", 
+            "Aif1", "P2ry12"), cols.use = c("grey", "blue"), reduction.use = "tsne")
+
+
+
+## Macrophages and lymphocytes ##
+# Macrophages
+FeaturePlot(object = brain, features.plot = c("Itgam", "Ptprc", "Mrc1"), 
+            cols.use = c("grey", "blue"), reduction.use = "tsne")
+
+# Lymphocytes
+FeaturePlot(object = brain, features.plot = c("Cd3e", "Ptprc"), 
+            cols.use = c("grey", "blue"), reduction.use = "tsne")
+
+
+## Endothelial cells ##
+FeaturePlot(object = brain, features.plot = c("Fn1", "Slco1a4", "Slco1c1", "Foxj1", "Enkur",
+            "Ccdc153", "Slc2a1", "Cdhr4"), cols.use = c("grey", "blue"),
+            reduction.use = "tsne")
+
+
+## Muscle cells ##
+# Smooth muscle - pericytes
+FeaturePlot(object = brain, features.plot = c("Acta2", "Mustn1","Tagln"), 
+            cols.use = c("grey", "blue"), reduction.use = "tsne")
+
+# Smooth muscle - mural cells
+FeaturePlot(object = brain, features.plot = c("Acta2", "Tagln", "Mustn1"), 
+            cols.use = c("grey", "blue"), reduction.use = "tsne")
+
+
+## Pituitary cells
+FeaturePlot(object = brain, features.plot = c("Tshb"), 
+            cols.use = c("grey", "blue"), reduction.use = "tsne")
+
+
+## Vascular and leptomeningial cells
+FeaturePlot(object = brain, features.plot = c("Lum", "Col1a1", "Col3a1"), 
+            cols.use = c("grey", "blue"), reduction.use = "tsne")
+  
+
+## Rename the cluster by the likely cell types
+# Plot
+current.cluster.id <- c(0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10)
+new.cluster.id <- c("Astrocytes", "Tanycytes", "Oligodendrocytes", 
+                    "Ependymal cells", "Neurons", "Endothelial cells", 
+                    "Oligodendrocyte precusors", "Immune cells",
+                    "Vascular and leptomenigial cells", "Unidentified", 
+                    "Pituitary cells")
+brain@ident <- plyr::mapvalues(x = brain@ident, from = current.cluster.id, 
+                               to = new.cluster.id)
+TSNEPlot(object = brain, do.label = FALSE, pt.size = 0.5)
+
+
+## Cluster the cells at resolution 0.2 ##
+brain <- FindClusters(object = brain, reduction.type = "pca", dims.use = 1:15, 
+                      resolution = 0.2, print.output = 0, save.SNN = TRUE, 
+                      force.recalc = TRUE)
+
+# Perform nonlinear dimensionality reduction
+brain <- RunTSNE(object = brain, dims.use = 1:15, do.fast = TRUE)
+
+# Plot
+TSNEPlot(object = brain, do.label = TRUE)
+
+
+## Cluster the cells at resolution 0.3 ##
+brain <- FindClusters(object = brain, reduction.type = "pca", dims.use = 1:15, 
+                      resolution = 0.3, print.output = 0, save.SNN = TRUE, 
+                      force.recalc = TRUE)
+
+# Perform nonlinear dimensionality reduction
+brain <- RunTSNE(object = brain, dims.use = 1:15, do.fast = TRUE)
+
+# Plot
+TSNEPlot(object = brain, do.label = TRUE)
+
+
