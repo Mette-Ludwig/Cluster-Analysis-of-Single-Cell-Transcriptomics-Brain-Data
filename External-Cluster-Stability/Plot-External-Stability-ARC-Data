@@ -1,8 +1,8 @@
 library(reshape2)
 library(ggplot2)
 
-### Plot the Adjusted Rand index (ARI) and the Rand index (RI) of the ARC data ###
 
+# Load the stability matrix
 load("~/ygg-projects/mludwig/Rand_Index/RI_ARC_data.RData")
 
 ## Reshape the cluster stability matrix for plotting ##
