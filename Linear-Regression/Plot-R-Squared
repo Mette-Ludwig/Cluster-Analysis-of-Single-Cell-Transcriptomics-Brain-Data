@@ -1,7 +1,6 @@
 library(ggplot2)
 library(reshape2)
 
-### Plot the R^2 values for the different linear regression models ###
 
 # Load the matrix containing the R^2 values 
 load("~/ygg-projects/mludwig/Influence_of_cell_features/R.squared.RData")
