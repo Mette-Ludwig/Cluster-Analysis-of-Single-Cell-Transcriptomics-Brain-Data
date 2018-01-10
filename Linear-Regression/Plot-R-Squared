@@ -1,0 +1,28 @@
+library(ggplot2)
+library(reshape2)
+
+### Plot the R^2 values for the different linear regression models ###
+
+# Load the matrix containing the R^2 values 
+load("~/ygg-projects/mludwig/Influence_of_cell_features/R.squared.RData")
+
+# Reshape the matrix for plotting
+r.squared <- data.frame(matrix(unlist(r.squared), nrow=60))
+colnames(r.squared) <- c("Resolution", "Ribo", "Mito", "TransCount")
+r.squared.long <- melt(r.squared, id.vars=c("Resolution"))
+colnames(r.squared.long)[2:3] <- c("Feature", "R2")
+
+
+# Plot the resolution values against the R^2 values 
+ggplot(data=r.squared.long, aes(x=Resolution, y=R2, line=Feature, 
+                                col=Feature)) + 
+  geom_line(size=1) +
+  scale_x_continuous(breaks=seq(0, 6, 0.5)) +
+  scale_y_continuous(breaks=seq(0, 0.75, 0.05)) +
+  ylab(expression(paste(R^2))) +
+  theme(legend.title=element_blank(), legend.text=element_text(size=14),
+        axis.title=element_text(size=17)) + 
+  scale_color_manual(labels = c("Fraction ribosomal RNA", 
+                                "Fraction mitochondrial RNA",
+                                "Transcript count"), 
+                     values = c("#53B400", "#C49A00", "#FB61D7"))
