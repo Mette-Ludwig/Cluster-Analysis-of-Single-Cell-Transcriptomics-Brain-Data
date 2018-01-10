@@ -1,7 +1,6 @@
 library(reshape2)
 library(ggplot2)
 
-### Plot the Adjusted Rand index (ARI) of the seven datasets ###
 
 # Load the stability matrix
 load("~/ygg-projects/mludwig/Rand_Index/RI_7_datasets.RData")
