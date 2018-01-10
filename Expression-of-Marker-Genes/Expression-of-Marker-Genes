@@ -11,8 +11,8 @@ data.path <- paste("~/ygg-data/sc-10x/data-runs/170612-perslab-arc_lira",
 # Load the ARC dataset 
 brain.data <- Read10X(data.dir = data.paths[8])
 
-# Initialize the Seurat object with the raw (non-normalized data).  Keep all
-# genes expressed in >= 3 cells. Keep all cells with at least 200 detected genes
+# Initialize a Seurat object. Keep all genes expressed in or more 3 cells. 
+# Keep all cells with at least 200 detected genes
 brain <- CreateSeuratObject(raw.data = brain.data, min.cells = 3, min.genes = 200, 
                             project = "10X_brain")
 
