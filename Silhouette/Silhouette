@@ -1,0 +1,141 @@
+# Load packages
+# Seurat
+library(Seurat)
+library(dplyr)
+library(Matrix)
+library(foreach)
+library(doMC)
+library(cluster)
+
+
+# Allow 20 cores to be used
+registerDoMC(20)
+
+# Load functions for data processing and clustering
+source("Data_processing_and_clustering.R")
+
+
+# Load the ARC data
+brain.data <- Read10X(data.dir = paste("~/ygg-data/sc-10x/data-runs/170612-perslab-arc_lira",
+                      "/agg-arc_lira-s1_12-no_norm/outs/filtered_gene_bc_matrices_mex/mm10", 
+                       sep=""))
+
+# Initialize a Seurat object with the raw (non-normalized) data. Keep all
+# genes expressed in >= 3 cells. Keep all cells with at least 200 detected genes
+brain <- CreateSeuratObject(raw.data = brain.data, min.cells = 3, min.genes = 200, 
+                            project = "10X_brain")
+
+# Preprocess of the ARC data
+brain <- perform.pca(data = brain)
+
+resolutions <- c(seq(0.1, 6, 0.1))
+
+# Compute the silhouettes in a parallelized loop using 15 principal components
+silhouette15 <- foreach(i=1:length(resolutions), .combine=rbind) %dopar% {
+  
+  # Find clusters in the original data
+  brain <- find.clusters(data = brain, resolution = resolutions[i], nPCs = 15)
+  
+  # Remove barcode from cluster id
+  cluster.id <- vector()
+  for (cell in 1:length(brain@ident)){
+    cluster.id <- c(cluster.id, brain@ident[[cell]])
+  }
+  
+  # Compute an Euclidean distance matrix from the first 15 PCs
+  pc <-brain@dr$pca@cell.embeddings[,1:15]
+  distance <- dist(pc, method="euclidean")
+  
+  # Compute the silhouette mean and median width
+  sil <- silhouette(x = cluster.id, dist = distance)
+  mean.sil <- mean(sil[,3])
+  median.sil <- median(sil[,3])
+  
+  # Compute the number of clusters
+  brain.ident <- as.numeric(brain@ident)
+  n.clusters <- length(unique(brain.ident))
+  
+  silhouette_i <- c(Resolution=resolutions[i], Mean=mean.sil, Median=median.sil, n.clusters)
+  return(silhouette_i)
+}  
+
+save(silhouette15, file = "~/ygg-projects/mludwig/Rand_Index/Silhouette/Silhouette_15PCs.RData")
+
+
+## Repeat for ARC data when represented by 50 and 100 principal components 
+
+## Use 50 principal components
+
+# Preprocess of the ARC data
+brain <- perform.pca(data = brain, nPCs=50)
+
+# Compute the silhouettes in a parallelized loop using 50 principal components
+silhouette50 <- foreach(i=1:length(resolutions), .combine=rbind) %dopar% {
+  
+  # Find clusters in the original data
+  brain <- find.clusters(data = brain, resolution = resolutions[i], nPCs = 50)
+  
+  # Remove barcode from cluster id
+  cluster.id <- vector()
+  for (cell in 1:length(brain@ident)){
+    cluster.id <- c(cluster.id, brain@ident[[cell]])
+  }
+  
+  # Compute an Euclidean distance matrix from the first 50 PCs
+  pc <-brain@dr$pca@cell.embeddings[,1:50]
+  distance <- dist(pc, method="euclidean")
+  
+  # Compute the silhouette mean and median width
+  sil <- silhouette(x = cluster.id, dist = distance)
+  mean.sil <- mean(sil[,3])
+  median.sil <- median(sil[,3])
+  
+  # Compute the number of clusters
+  brain.ident <- as.numeric(brain@ident)
+  n.clusters <- length(unique(brain.ident))
+  
+  #print(paste("Resolution", resolutions[i]))  
+  silhouette_i <- c(Resolution=resolutions[i], Mean=mean.sil, Median=median.sil, n.clusters)
+  return(silhouette_i)
+}  
+
+save(silhouette50, file = "~/ygg-projects/mludwig/Rand_Index/Silhouette/Silhouette_50PCs.RData")
+
+
+## Use 100 principal components
+
+# Preprocess of the ARC data
+brain <- perform.pca(data = brain, nPCs=100)
+
+# Compute the silhouettes in a parallelized loop using 100 principal components
+silhouette100 <- foreach(i=1:length(resolutions), .combine=rbind) %dopar% {
+  
+  # Find clusters in the original data
+  brain <- find.clusters(data = brain, resolution = resolutions[i], nPCs = 100)
+  
+  # Remove barcode from cluster id
+  cluster.id <- vector()
+  for (cell in 1:length(brain@ident)){
+    cluster.id <- c(cluster.id, brain@ident[[cell]])
+  }
+  
+  # Compute an Euclidean distance matrix from the first 100 PCs
+  pc <-brain@dr$pca@cell.embeddings[,1:100]
+  distance <- dist(pc, method="euclidean")
+  
+  # Compute the silhouette mean and median width
+  sil <- silhouette(x = cluster.id, dist = distance)
+  mean.sil <- mean(sil[,3])
+  median.sil <- median(sil[,3])
+  
+  # Compute the number of clusters
+  brain.ident <- as.numeric(brain@ident)
+  n.clusters <- length(unique(brain.ident))
+  
+  #print(paste("Resolution", resolutions[i]))  
+  silhouette_i <- c(Resolution=resolutions[i], Mean=mean.sil, Median=median.sil, n.clusters)
+  return(silhouette_i)
+}  
+
+save(silhouette100, file = "~/ygg-projects/mludwig/Rand_Index/Silhouette/Silhouette_100PCs.RData")
+
