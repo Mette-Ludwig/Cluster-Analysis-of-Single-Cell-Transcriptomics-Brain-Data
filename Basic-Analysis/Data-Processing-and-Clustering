@@ -1,0 +1,50 @@
+# Load packages
+library(Seurat)
+library(dplyr)
+library(Matrix)
+
+
+# Function for removing unwanted sources of variation, normalizing the data, 
+# and finally computing the principal components 
+perform.pca <- function(data, mt="^mt-", nPCs=20) {
+  
+  # Stash QC statistics about the fraction of mitochondrial genes
+  mito.genes <- grep(pattern = mt, x = rownames(x = data@data), value = TRUE)
+  fraction.mito <- Matrix::colSums(data@raw.data[mito.genes, ])/Matrix::colSums(data@raw.data)
+  data <- AddMetaData(object = data, metadata = fraction.mito, col.name = "fraction.mito")
+  
+  # Filter out outlier cells
+  data <- FilterCells(object = data, subset.names = c("nGene", "fraction.mito"), 
+                      low.thresholds = c(300, -Inf), high.thresholds = c(5500, 0.15))
+  
+  # Normalize data
+  data <- NormalizeData(object = data, normalization.method = "LogNormalize", 
+                        scale.factor = 10000)
+  
+  # Detect variable genes across the single cells
+  data <- FindVariableGenes(object = data, mean.function = ExpMean, 
+                            dispersion.function = LogVMR, do.plot = FALSE, 
+                            x.low.cutoff = 0.0125, x.high.cutoff = 3, y.cutoff = 0.5)
+  
+  # Scale the data and regress out nUMI and fraction.mito
+  data <- ScaleData(object = data, vars.to.regress = c("nUMI", "fraction.mito"))
+  
+  # Compute PCA based on the variable genes.
+  data <- RunPCA(object = data, pc.genes = data@var.genes, pcs.compute = nPCs,
+                 do.print = FALSE, maxit = 300)
+  
+  # Return data object
+  return(data)
+}
+
+
+## Function that clusters the cells for a given resolution and number of principal components
+find.clusters <- function(data, resolution, nPCs){
+  
+  # Cluster the cells
+  data <- FindClusters(object = data, reduction.type = "pca", dims.use = 1:nPCs, 
+                       resolution = resolution, print.output = 0, save.SNN = FALSE, 
+                       force.recalc = TRUE, fastpath = FALSE, maxit = 600)
+  
+  return(data)
+}
