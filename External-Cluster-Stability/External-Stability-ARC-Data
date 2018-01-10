@@ -1,0 +1,122 @@
+# Load packages
+library(Seurat)
+library(dplyr)
+library(Matrix)
+library(fossil)
+library(foreach)
+library(doMC)
+
+
+# Allow 20 cores to be used
+registerDoMC(10)
+
+# Load functions for data processing and clustering
+source("Data_processing_and_clustering.R")
+
+
+# Load ARC data
+brain.data <- Read10X(data.dir = file.path("~/ygg-data/sc-10x/data-runs",
+                                           "/170504-perslab-arc_pilot/agg_arc1-2/outs",
+                                           "filtered_gene_bc_matrices_mex/mm10/", sep=""))
+
+# Initialize a Seurat object with the raw (non-normalized) data. Keep all
+# genes expressed in >= 3 cells. Keep all cells with at least 200 detected genes
+brain <- CreateSeuratObject(raw.data = brain.data, min.cells = 3, min.genes = 200, 
+                            project = "10X_brain")
+
+
+# Preprocess of the original data
+brain <- perform.pca(data = brain)
+
+# Define the different resolution parameters 
+resolutions <- c(seq(0.1, 6, 0.1))
+# Define the number of iterations
+n.iterations <- 50
+
+set.seed(1)
+
+# Create 50 bootstrap samples from the original data
+boot.idx <- matrix(nrow=n.iterations, ncol=ncol(brain.data))
+for (i in 1:nrow(boot.idx)){
+  boot.idx[i,] <- sample(x=1:ncol(brain.data), size=ncol(brain.data), 
+                         replace=TRUE)
+}
+
+
+time.start <- proc.time()
+
+# The Adjusted Rand index (ARI) and Rand index (RI) are computed 
+# in a parallelized loop
+# Loop over the different resolutions
+stability <- foreach(i=1:length(resolutions), .combine=rbind) %dopar% {
+  
+  # Find clusters in the original data
+  brain <- find.clusters(data = brain, resolution = resolutions[i], nPCs=15)
+  
+  # Initialize vector to store data 
+  RI <- vector(length = n.iterations)
+  ARI <- vector(length = n.iterations)
+  n.clusters.boot <- vector(length = n.iterations)
+  
+  # Loop over the different bootstrap datasets
+  foreach(j=1:n.iterations, .combine=c) %do% {
+    
+    # Generate a bootstrap dataset
+    boot.data <- brain.data[, boot.idx[j,]]
+    
+    # Add a unique prefix to the cell names since some Seurat functions only accept unique
+    # cell names
+    colnames(boot.data) <- paste(seq(1,length(brain.data[1,])), colnames(boot.data),
+                                 sep="-")
+    
+    # Create a Seurat object for the bootstrap sample
+    boot <- CreateSeuratObject(raw.data = boot.data, min.cells = 3, min.genes = 200, 
+                               project = "10X_brain_boot")
+    
+    # Perform PCA and cluster the cells 
+    boot <- perform.pca(data = boot)
+    boot <- find.clusters(data = boot, resolution = resolutions[i], nPCs=15)
+    
+    # Remove prefix from cell names in the bootstrap dataset
+    boot.cell.names <- sub("[0-9]*-", "", boot@cell.names)
+    
+    # Find the indices of the data points in the original dataset matching the
+    # cell names in the bootstrap dataset
+    idx <- match(boot.cell.names, brain@cell.names)
+    
+    # Turn cluster identity into a numeric value start from 1
+    boot.ident <- as.numeric(boot@ident)
+    brain.ident <- as.numeric(brain@ident[idx])
+    
+    if (sum(is.na(brain.ident)) > 0){
+      idx.remove <- which(is.na(brain.ident))
+      boot.ident <- boot.ident[-idx.remove]
+      brain.ident <- brain.ident[-idx.remove]
+    }
+    
+    # Compute the RI and ARIx
+    RI[j] <- rand.index(brain.ident, boot.ident)
+    ARI[j] <- adj.rand.index(brain.ident, boot.ident)
+    
+    # Number of clusters in bootstrap samples
+    n.clusters.boot[j] <- length(unique(boot.ident))
+  }
+
+    ## Add information to the cluster stability matrix
+    # Number of clusters in the original dataseet
+    n.clusters.brain <- length(unique(brain.ident))
+    # Standard deviation of the number of clusters in the bootstrap samples
+    cluster.sd <- sd(n.clusters.boot)
+    
+    list(resolution=resolutions[i], n.clusters.boot=mean(n.clusters.boot), 
+         n.clusters.brain=n.clusters.brain, RI=mean(RI), RI.sd=sd(RI), 
+         ARI=mean(ARI), ARI.sd=sd(ARI), cluster.sd=cluster.sd)
+}
+
+# Evaluate the runtime
+time.total <- round(proc.time() - time.start, digits=0)
+print(time.total)
+
+save(stability, file= "~/ygg-projects/mludwig/Rand_Index/RI_ARC_data.RData")
+
+
