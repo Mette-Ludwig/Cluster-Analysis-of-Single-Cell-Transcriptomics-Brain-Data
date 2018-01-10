@@ -2,7 +2,8 @@
 library(reshape2)
 library(ggplot2)
 
-### Plot the varying resolutions against the silhouette coefficient ### 
+
+## Plot the varying resolutions against the silhouette coefficient 
 
 # Load the silhouette data
 load("~/ygg-projects/mludwig/Rand_Index/Silhouette/Silhouette_15PCs.RData")
@@ -27,7 +28,7 @@ ggplot(data=silhouette15.long, aes(x=Resolution, y=Silhouette,
   labs(y="Silhouette")
 
 
-### Plot the varying resolutions against the silhouette coefficient 
+## Plot the varying resolutions against the silhouette coefficient 
 # when varying the number of principal components ###
 
 # Load the silhouette data when 50 principal components have been used
