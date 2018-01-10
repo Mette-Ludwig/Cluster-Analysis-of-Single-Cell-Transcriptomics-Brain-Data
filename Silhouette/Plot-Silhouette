@@ -1,0 +1,88 @@
+# Load packages
+library(reshape2)
+library(ggplot2)
+
+### Plot the varying resolutions against the silhouette coefficient ### 
+
+# Load the silhouette data
+load("~/ygg-projects/mludwig/Rand_Index/Silhouette/Silhouette_15PCs.RData")
+# Reshape the data matrix
+silhouette15 <- data.frame(matrix(unlist(silhouette15), nrow=60))
+colnames(silhouette15) <- c("Resolution", "Mean", "Median","Clusters")
+silhouette15.long <- melt(silhouette15, id.vars= c("Resolution", "Clusters"))
+colnames(silhouette15.long)[3:4] <- c("Variable", "Silhouette")
+silhouette15.long$PCs <- "15"
+
+
+# Plot 
+ggplot(data=silhouette15.long, aes(x=Resolution, y=Silhouette, 
+                                  line=Variable, col=Variable)) +  
+  geom_line(size=1) +
+  scale_x_continuous(breaks=seq(0, 6, 0.5)) +
+  scale_y_continuous(breaks=seq(0, 0.6, 0.1)) +
+  theme(legend.title=element_blank(), legend.text=element_text(size=14),
+        axis.title=element_text(size=17)) + 
+  scale_color_manual(labels = c("Mean", "Median"), 
+                     values = c("#00B6EB", "#C49A00")) +
+  labs(y="Silhouette")
+
+
+### Plot the varying resolutions against the silhouette coefficient 
+# when varying the number of principal components ###
+
+# Load the silhouette data when 50 principal components have been used
+load("~/ygg-projects/mludwig/Rand_Index/Silhouette/Silhouette_50PCs.RData")
+# Reshape the data matric
+silhouette50 <- data.frame(matrix(unlist(silhouette50), nrow=60))
+colnames(silhouette50) <- c("Resolution", "Mean", "Median","Clusters")
+silhouette50.long <- melt(silhouette50, id.vars= c("Resolution", "Clusters"))
+colnames(silhouette50.long)[3:4] <- c("Variable", "Silhouette")
+silhouette50.long$PCs <- "50"
+
+# Load the silhouette data when 100 principal components have been used
+load("~/ygg-projects/mludwig/Rand_Index/Silhouette/Silhouette_100PCs.RData")
+silhouette100 <- data.frame(matrix(unlist(silhouette100), nrow=60))
+colnames(silhouette100) <- c("Resolution", "Mean", "Median","Clusters")
+silhouette100.long <- melt(silhouette100, id.vars= c("Resolution", "Clusters"))
+silhouette100.long
+colnames(silhouette100.long)[3:4] <- c("Variable", "Silhouette")
+silhouette100.long$PCs <- "100"
+
+
+## Combine all three data matrices
+silhouette15$PCs <- as.factor("15")
+silhouette50$PCs <- as.factor("50")
+silhouette100$PCs <- as.factor("100")
+silhouette.all <- rbind(silhouette15, silhouette50, silhouette100)
+
+
+# Plot the resolution against the silhouette
+ggplot(data=silhouette.all, aes(x=Resolution, y=Mean, 
+                                line=PCs, col=PCs)) +  
+  geom_line(size=1) +
+  scale_x_continuous(breaks=seq(0, 6, 0.5)) +
+  scale_y_continuous(breaks=seq(0, 0.6, 0.1)) +
+  theme(legend.text=element_text(size=14),
+        axis.title=element_text(size=17)) + 
+  labs(y="Silhouette")
+
+
+# Plot the resolution against the number of clusters
+ggplot(data=silhouette.all, aes(x=Resolution, y=Clusters, 
+                                line=PCs, col=PCs)) +  
+  geom_line(size=1) +
+  scale_x_continuous(breaks=seq(0, 6, 0.5)) +
+  scale_y_continuous(breaks=seq(0, 65, 5)) +
+  theme(legend.text=element_text(size=14),
+        axis.title=element_text(size=17)) + 
+  labs(y="Clusters")
+
+
+# Plot the number of clusters against the silhouette
+ggplot(data=silhouette.all, aes(x=Clusters, y=Mean, 
+                                line=PCs, col=PCs)) +  
+  geom_line(size=1) +
+  scale_x_continuous(breaks=seq(10, 60, 5)) +
+  theme(legend.text=element_text(size=14),
+        axis.title=element_text(size=17)) + 
+  labs(y="Silhouette")
