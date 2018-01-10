@@ -1,0 +1,100 @@
+# Load packages
+library(Seurat)
+library(dplyr)
+library(Matrix)
+
+
+# Load the ARC data
+brain.data <- Read10X(data.dir = paste("~/ygg-data/sc-10x/data-runs/170612-perslab-arc_lira",
+                      "/agg-arc_lira-s1_12-no_norm/outs/filtered_gene_bc_matrices_mex/mm10", 
+                       sep=""))
+
+
+# Initialize a Seurat object
+brain <- CreateSeuratObject(raw.data = brain.data, min.cells = 3, min.genes = 200, 
+                            project = "10X_brain")
+
+# Compute the fraction of mitochondrial RNAs
+mito.genes <- grep(pattern = "^mt-", x = rownames(x = brain@data), value = TRUE)
+length(mito.genes) 
+fraction.mito <- apply(brain@raw.data[mito.genes, ], 2, sum)/apply(brain@raw.data, 2, sum)
+
+# Compute the fraction of ribosomal RNAs
+ribo.genes <- grep(pattern = "^Rp", x = rownames(x = brain@data), value = TRUE)
+length(ribo.genes)
+fraction.ribo <- apply(brain@raw.data[ribo.genes, ], 2, sum)/apply(brain@raw.data, 2, sum)
+
+# Store the information in the Seurat object
+brain <- AddMetaData(object = brain, metadata = fraction.mito, col.name = "fraction.mito")
+brain <- AddMetaData(object = brain, metadata = fraction.ribo, col.name = "fraction.ribo")
+
+# Save an instance of the object before normalizing
+brain.unomalized <- brain
+
+
+## Perform data preprocessing and PCA 
+
+brain <- FilterCells(object = brain, subset.names = c("nGene", "fraction.mito"), 
+                     low.thresholds = c(300, -Inf), high.thresholds = c(5500, 0.15))
+
+brain <- NormalizeData(object = brain, normalization.method = "LogNormalize", 
+                       scale.factor = 10000)
+
+brain <- FindVariableGenes(object = brain, mean.function = ExpMean, dispersion.function = LogVMR, 
+                           x.low.cutoff = 0.0125, x.high.cutoff = 3, y.cutoff = 0.5)
+
+brain <- ScaleData(object = brain, vars.to.regress = c("nUMI", "fraction.mito"))
+
+
+brain <- RunPCA(object = brain, pc.genes = brain@var.genes, do.print = FALSE, pcs.print = 1:5, 
+                genes.print = 5, pcs.compute = 20) 
+
+
+## Compute three linear models for resolution values between 0.1 and 6.0 
+
+resolutions <- c(seq(0.1, 6, 0.1))
+
+# Matrix to store the R^2 values  (coefficient of determination)
+# of the models
+R.squared <- matrix(nrow=length(resolutions), ncol=4)
+
+# Loop over the resolution values
+for(i in 1:length(resolutions)) {
+  
+  # Cluster the cells at the current resolution 
+  brain <- FindClusters(object = brain, reduction.type = "pca", dims.use = 1:15, 
+                        resolution = resolutions[i], print.output = 0, save.SNN = TRUE, 
+                        force.recalc = TRUE)
+  
+  # Save the transcript count
+  idx <- match(brain@cell.names, brain.unomalized@cell.names)
+  trans.count <- apply(brain.unomalized@data[, idx], 2, sum)
+  trans.count <- as.numeric(trans.count)
+  
+  # Save the cluster assignment
+  snn.cluster <- as.numeric(brain@ident)
+  
+  # Store data in a vector 
+  info <- cbind(brain@meta.data$fraction.ribo, brain@meta.data$fraction.mito, 
+                snn.cluster, cell.id, trans.count)
+  colnames(info) <- c("ribo", "mito", "cluster.id", "trans.count")
+  info <- data.frame(info)
+  info$cluster.id <- as.factor(info$cluster.id)
+  
+  # Fit the linear regression model for fraction of ribosomal RNA, 
+  # fraction of mitochondrial RNA and transcript count
+  lm.fit1 <- lm(ribo ~ cluster.id, data=info)
+  lm.fit2 <- lm(mito ~ cluster.id, data=info)
+  lm.fit3 <- lm(trans.count ~ cluster.id, data=info)
+  
+  # Compute the R^2 of the three models
+  r1 <- summary(lm.fit1)$r.squared
+  r2 <- summary(lm.fit2)$r.squared
+  r3 <- summary(lm.fit3)$r.squared
+  
+  # Store the R^2 in the matrix
+  R.squared[i,] <- c(resolutions[i], r1, r2, r3)
+}
+
+save(R.squared, file = "~/ygg-projects/mludwig/Influence_of_cell_features/R.squared.RData")
+
