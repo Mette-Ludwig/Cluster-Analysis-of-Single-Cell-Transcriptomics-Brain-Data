@@ -1,0 +1,85 @@
+# Load packages
+library(Seurat)
+library(dplyr)
+library(Matrix)
+
+
+# Define the path to data folder
+data.path <- paste("~/ygg-data/sc-10x/data-runs/170612-perslab-arc_lira",
+                   "/agg-arc_lira-s1_12-no_norm/outs/filtered_gene_bc_matrices_mex/mm10", 
+                     sep="")
+
+# Load the ARC dataset 
+brain.data <- Read10X(data.dir = data.path)
+
+# Initialize the Seurat object with the raw (non-normalized data).  Keep all
+# genes expressed in >= 3 cells. Keep all cells with at least 200 detected genes
+brain <- CreateSeuratObject(raw.data = brain.data, min.cells = 3, min.genes = 200, 
+                            project = "10X_brain")
+
+
+# Compute the fraction of mitochondrial RNA
+mito.genes <- grep(pattern = "^mt-", x = rownames(x = brain@data), value = TRUE)
+length(mito.genes) # 13 mitochondrial genes
+fraction.mito <- Matrix::colSums(brain@raw.data[mito.genes, ])/Matrix::colSums(brain@raw.data)
+
+
+# Save data to the Seurat object
+brain <- AddMetaData(object = brain, metadata = fraction.mito, col.name = "fraction.mito")
+
+# Plot the relationship between nUMI and mitochondrial RNA and number of genes
+par(mfrow = c(1, 2))
+GenePlot(object = brain, gene1 = "nUMI", gene2 = "fraction.mito")
+GenePlot(object = brain, gene1 = "nUMI", gene2 = "nGene")
+
+# Filter out cells that have unique gene counts over 5500 or less than
+# 300. Filter out cells that have unique fraction of mitochondrial RNA 
+# over 0.15
+brain <- FilterCells(object = brain, subset.names = c("nGene", "fraction.mito"), 
+                     low.thresholds = c(300, -Inf), high.thresholds = c(5500, 0.15))
+
+
+# Normalize the data 
+brain <- NormalizeData(object = brain, normalization.method = "LogNormalize", 
+                       scale.factor = 10000)
+
+
+# Detect variable genes across the cells
+par(mfrow = c(1,1))
+brain <- FindVariableGenes(object = brain, mean.function = ExpMean, dispersion.function = LogVMR, 
+                           x.low.cutoff = 0.0125, x.high.cutoff = 3, y.cutoff = 0.5)
+length(x = brain@var.genes)
+
+
+# Scale the data and remove unwanted sources of variation due to nUMI
+# and fraction of mitochondrial RNA
+brain <- ScaleData(object = brain, vars.to.regress = c("nUMI", "fraction.mito"))
+
+
+# Perform linear dimensionality reduction
+brain <- RunPCA(object = brain, pc.genes = brain@var.genes, do.print = FALSE, pcs.print = 1:5, 
+                genes.print = 5, pcs.compute = 20)
+
+
+# Heatmaps of the PCs
+PCHeatmap(object = brain, pc.use = 1:9, cells.use = 500, do.balanced = TRUE, 
+          label.columns = FALSE, use.full = FALSE)
+
+PCHeatmap(object = brain, pc.use = 10:18, cells.use = 500, do.balanced = TRUE, 
+          label.columns = FALSE, use.full = FALSE)
+
+
+# Knee plot of the PCs
+PCElbowPlot(object = brain, num.pc = 20)
+
+
+## Cluster the cells at resolution 0.1 ##
+brain <- FindClusters(object = brain, reduction.type = "pca", dims.use = 1:15, 
+                      resolution = 0.1, print.output = 0, save.SNN = TRUE, 
+                      force.recalc = TRUE)
+
+# Perform nonlinear dimensionality reduction
+brain <- RunTSNE(object = brain, dims.use = 1:15, do.fast = TRUE)
+
+# Plot
+TSNEPlot(object = brain, do.label = TRUE)
