@@ -1,0 +1,67 @@
+library(reshape2)
+library(ggplot2)
+
+### Plot the Adjusted Rand index (ARI) and the Rand index (RI) of the ARC data ###
+
+load("~/ygg-projects/mludwig/Rand_Index/RI_ARC_data.RData")
+
+## Reshape the cluster stability matrix for plotting ##
+stability <- data.frame(matrix(unlist(stability), nrow=60))
+
+colnames(stability) <- c("Resolution", "Bootstrap", "Original", "RI", "RI.sd", 
+                          "ARI", "ARI.sd", "cluster.sd")
+
+stability.long <- melt(stability, id=c("Resolution", "Bootstrap", "Original", 
+                                       "cluster.sd", "RI.sd", "ARI.sd"))
+
+colnames(stability.long)[7:8] <- c("Measure", "Index") 
+
+stability.long <- melt(stability.long, id.vars=c("Resolution", "Bootstrap", "Original", 
+                       "Measure", "Index", "cluster.sd"), 
+                        measure.vars=c("RI.sd", "ARI.sd"))
+
+idx <- stability.long$Measure=="ARI" & stability.long$variable=="ARI.sd" |
+       stability.long$Measure=="RI"  & stability.long$variable=="RI.sd"
+
+stability.long <-stability.long[idx,]
+
+colnames(stability.long)[8] <- "Sd" 
+stability.long <- melt(stability.long, id.vars=c("Resolution", "Measure", "Index", "Sd",
+                       "cluster.sd"), measure.vars=c("Bootstrap", "Original"))
+
+colnames(stability.long)[6:7] <- c("Dataset", "Clusters")
+
+
+## Plot the resolution against the number of clusters 
+
+# Set the standard deviation of the number of clusters in the original dataset to zero
+idx <- which(stability.all$Dataset=="Original")
+stability.all$cluster.sd[idx] <- 0
+
+pd <- position_dodge(0.1)
+ggplot(data=stability.all, aes(x=Resolution, y=Clusters, line=Dataset, col=Dataset)) + 
+  geom_errorbar(aes(ymin=Clusters-cluster.sd, ymax=Clusters+cluster.sd), width=.1, position=pd) +
+  geom_line(position=pd, size=1) +
+  geom_point(position=pd) +
+  scale_x_continuous(breaks=seq(0, 6, 0.5)) +
+  scale_y_continuous(breaks=seq(0, 60, 5)) +
+  theme(legend.title=element_blank(), legend.text=element_text(size=14),
+        axis.title=element_text(size=17)) + 
+  scale_color_manual(labels = c("Bootstrap samples", "Original data"), 
+                     values = c("#C49A00", "#A58AFF"))
+
+
+
+## Plot the resolution against the ARI and RI
+pd <- position_dodge(0.1)
+ggplot(data=stability.res1.long, aes(x=Resolution, y=Index, line=Measure, 
+                                     col=Measure)) +  
+  geom_errorbar(aes(ymin=Index-Sd, ymax=Index+Sd), width=.1, position=pd) +
+  geom_line(position=pd, size=1) +
+  geom_point(position=pd) +
+  scale_x_continuous(breaks=seq(0, 6, 0.5)) +
+  scale_y_continuous(breaks=seq(0.8, 1, 0.1)) +
+  theme(legend.title=element_blank(), legend.text=element_text(size=14),
+        axis.title=element_text(size=17)) 
+
+
